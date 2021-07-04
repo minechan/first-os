@@ -1,7 +1,7 @@
 .code16
 .global     start
 
-# --------------------------------------
+# ------------------------------------------------------------------
 # メインのプログラム
 start:
     # スタック領域を0x7c00から下に
@@ -14,19 +14,90 @@ start:
     mov     %ax, %es
     sti
     # ビデオモードを16色テキストに
-    mov     $0x03,  %al
+    mov     $0x03, %al
     int     $0x10
-    # メッセージの出力
-    # call    print_return
-    mov     $msg_hello, %si
-    call    print_string
-halt:
-    # 停止
-    hlt
-    jmp halt
 
-# --------------------------------------
+    # 起動ディスクの情報を取得
+    mov     %dl, drive_info.number
+    # ドライブパラメータの取得
+    # CH = 最大シリンダ番号[7:0]
+    # CL = 最大シリンダ番号[9:8] 最大セクタ番号[5:0]
+    # DH = 最大ヘッド番号
+    mov     $0x08, %ah
+    int     $0x13
+    inc     %dh
+    mov     %dh, drive_info.heads
+    mov     %ch, drive_info.cylinders
+    push    %cx
+    and     $0b00111111, %cl
+    mov     %cl, drive_info.sectors
+    pop     %cx
+    shr     $6, %cl
+    mov     %cl, drive_info.cylinders+1
+    incw    drive_info.cylinders
+
+    # セクタを読み込む
+    mov     $msg_loading, %si
+    call    print_string
+    mov     $0x0001, %ax
+    call    lba2chs
+    mov     $0x0201, %ax
+    mov     drive_info.number, %dl
+    mov     $0x7e00, %bx
+    clc
+    int     $0x13
+    jc      failed
+    mov     $msg_ok, %si
+    call    print_string
+    ljmp    $0x0000, $boot
+
+failed:
+    mov     $msg_failed, %si
+    call    print_string
+    mov     %ah, %al
+    call    print_number8
+failed_halt:
+    hlt
+    jmp     failed_halt
+
+# ------------------------------------------------------------------
 # サブルーチン
+
+# LBAをCHSに変換
+# パラメータ
+#     AX: LBA
+# 戻り値
+#     CH: シリンダ番号[7:0]
+#     CL: シリンダ番号[9:8], セクタ番号[5:0]
+#     DH: ヘッド番号
+lba2chs:
+    # レジスタを退避
+    push    %ax
+    push    %bx
+    push    %dx
+    # Tempとセクタ番号を求める
+    xor     %dx, %dx
+    xor     %bh, %bh
+    mov     drive_info.sectors, %bl
+    div     %bx
+    inc     %dx
+    and     $0b00111111, %dl
+    mov     %dl, %cl
+    # ヘッド番号とシリンダ番号を求める
+    xor     %dx, %dx
+    mov     drive_info.heads, %bl
+    div     %bx
+    mov     %al, %ch
+    and     $0b00000011, %ah
+    shl     $6, %ah
+    or      %ah, %cl
+    mov     %dl, %dh
+    # レジスタを戻す
+    pop     %ax
+    mov     %al, %dl
+    pop     %bx
+    pop     %ax
+    ret
 
 # 文字列の出力
 # SI: 文字列のアドレス
@@ -97,12 +168,47 @@ print_number8.print:
 print_number8.numbers:
     .ascii "0123456789ABCDEF"
 
-# --------------------------------------
-# リソース
+# ------------------------------------------------------------------
+# データ
 
-msg_hello:
-    .ascii "Hello, world!\r\n"
-    .asciz "Repository: https://github.com/minechan/first-os\r\n"
+drive_info:
+
+drive_info.number:
+    .byte 0x00
+
+drive_info.cylinders:
+    .word 0x0000
+
+drive_info.sectors:
+    .byte 0x00
+
+drive_info.heads:
+    .byte 0x00
+
+msg_loading:
+    .asciz "Loading boot monitor..."
+
+msg_ok:
+    .asciz "OK!"
+
+msg_failed:
+    .asciz "Failed! 0x"
 
 .fill 510-(.-start), 1, 0
 .word 0xaa55
+
+boot:
+    call print_return
+    call print_return
+    mov $msg_boot, %si
+    call print_string
+
+boot_halt:
+    hlt
+    jmp boot_halt
+
+msg_boot:
+    .ascii "Welcome to FirstOS!\r\n"
+    .asciz "Repository: https://github.com/minechan/first-os\r\n"
+
+.fill 512-(.-boot), 1, 0
