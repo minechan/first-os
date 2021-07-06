@@ -1,8 +1,19 @@
-.code16
-.global     start
+    .global     start
+    .global     lba2chs
+    .global     print_string
+    .global     print_return
+    .global     print_number8
+    .global     drive_info
+    .global     drive_info.number
+    .global     drive_info.cylinders
+    .global     drive_info.sectors
+    .global     drive_info.heads
 
 # ------------------------------------------------------------------
-# メインのプログラム
+# プログラム
+    .text
+    .code16
+
 start:
     # スタック領域を0x7c00から下に
     cli
@@ -43,13 +54,13 @@ start:
     call    lba2chs
     mov     $0x0201, %ax
     mov     drive_info.number, %dl
-    mov     $0x7e00, %bx
+    mov     $0x8800, %bx
     clc
     int     $0x13
     jc      failed
     mov     $msg_ok, %si
     call    print_string
-    ljmp    $0x0000, $boot
+    ljmpw   $0x0000, $start16
 
 failed:
     mov     $msg_failed, %si
@@ -165,14 +176,26 @@ print_number8.print:
     int     $0x10
     ret
 
+# ------------------------------------------------------------------
+# 定数
+
 print_number8.numbers:
     .ascii "0123456789ABCDEF"
 
+msg_loading:
+    .asciz "Loading boot monitor..."
+
+msg_ok:
+    .asciz "OK!"
+
+msg_failed:
+    .asciz "Failed! 0x"
+
 # ------------------------------------------------------------------
-# データ
+# メモリ
+    .bss
 
 drive_info:
-
 drive_info.number:
     .byte 0x00
 
@@ -184,31 +207,3 @@ drive_info.sectors:
 
 drive_info.heads:
     .byte 0x00
-
-msg_loading:
-    .asciz "Loading boot monitor..."
-
-msg_ok:
-    .asciz "OK!"
-
-msg_failed:
-    .asciz "Failed! 0x"
-
-.fill 510-(.-start), 1, 0
-.word 0xaa55
-
-boot:
-    call print_return
-    call print_return
-    mov $msg_boot, %si
-    call print_string
-
-boot_halt:
-    hlt
-    jmp boot_halt
-
-msg_boot:
-    .ascii "Welcome to FirstOS!\r\n"
-    .asciz "Repository: https://github.com/minechan/first-os\r\n"
-
-.fill 512-(.-boot), 1, 0
