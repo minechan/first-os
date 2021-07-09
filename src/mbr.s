@@ -8,6 +8,9 @@
     .global     drive_info.cylinders
     .global     drive_info.sectors
     .global     drive_info.heads
+    .global     msg_ok
+    .global     msg_failed
+    .global     mamory_map_counter
 
 # ------------------------------------------------------------------
 # プログラム
@@ -52,7 +55,7 @@ start:
     call    print_string
     mov     $0x0001, %ax
     call    lba2chs
-    mov     $0x0201, %ax
+    mov     $0x0205, %ax
     mov     drive_info.number, %dl
     mov     $0x8800, %bx
     clc
@@ -178,6 +181,7 @@ print_number8.print:
 
 # ------------------------------------------------------------------
 # 定数
+    .data
 
 print_number8.numbers:
     .ascii "0123456789ABCDEF"
@@ -206,4 +210,7 @@ drive_info.sectors:
     .byte 0x00
 
 drive_info.heads:
+    .byte 0x00
+
+mamory_map_counter:
     .byte 0x00
